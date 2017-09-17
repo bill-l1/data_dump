@@ -1,3 +1,9 @@
+var premChart;
+var sexChart;
+var monthChart;
+var dayChart;
+var activityChart;
+
 d3.json("data/part-poli.json", function(err, data) {
     if (err) throw err;
 
@@ -18,22 +24,20 @@ d3.json("data/part-poli.json", function(err, data) {
     var sexDim = ndx.dimension(function(d) { return d["sex"] });
     var monthDim = ndx.dimension(function(d) { return months[d["policy_start_date"].getMonth()] });
     var dayDim = ndx.dimension(function(d) { return days[d["policy_start_date"].getDay()] }); 
-    var dateDim = ndx.dimension(function(d) { console.log(d["policy_start_date"]); return d["policy_start_date"]}); 
-    var provDim = ndx.dimension(function(d) { return d ["state"] });
+    var dateDim = ndx.dimension(function(d) { return d["policy_start_date"]}); 
 
     var premGroup = premDim.group();
     var sexGroup = sexDim.group();
     var monthGroup = monthDim.group();
     var dayGroup = dayDim.group();
     var dateGroup = dateDim.group();
-    var provGroup = provDim.group();
 
-    var premChart = dc.barChart("#insurancePremium");
-    var sexChart = dc.pieChart("#sex");
-    var monthChart = dc.barChart("#month")
-    var dayChart = dc.barChart("#day")
-    var activityChart = dc.barChart("#activityChart")
-    var bubbleChart = dc.bubbleOverlay("#bubbleChart").svg(d3.select("#ca-chart svg"));
+
+    premChart = dc.barChart("#insurancePremium");
+    sexChart = dc.pieChart("#sex");
+    monthChart = dc.barChart("#month")
+    dayChart = dc.barChart("#day")
+    activityChart = dc.barChart("#activityChart")
     
     premChart
         .width (1000)
@@ -42,12 +46,24 @@ d3.json("data/part-poli.json", function(err, data) {
         .group(premGroup)
 
     sexChart
+        .height (300)
         .dimension(sexDim)
         .group(sexGroup)
-        .legend(dc.legend())
+        .legend(dc.legend().legendText(function(d) { 
+           if(d.name == 'M'){
+                return "Male"; 
+           }else if(d.name == 'F'){
+                return "Female"; 
+           }
+            
+        }))
         .label(function(d) {
-            return Math.round(d.value / all.value() * 100) + '%';
+            if(all.value()){
+                return Math.round(d.value / all.value() * 100) + '%';
+            }
+            
         })
+        .colors(d3.scale.ordinal().range(["#ADD8E6", "#FFC0CB"]));
     
     monthChart
         .colorAccessor(function (d){return d.value.absGain;})
@@ -62,6 +78,7 @@ d3.json("data/part-poli.json", function(err, data) {
         .group(monthGroup)
         .xAxisLabel('Month')
         .yAxisLabel('Policies Sold')
+        .elasticY(true);
     
     
     
@@ -80,11 +97,14 @@ d3.json("data/part-poli.json", function(err, data) {
         })
         .xAxisLabel('Day of the Week')
         .yAxisLabel('Policies Sold')
+        .elasticY(true);
     
 
     var minDate = new Date(2015, 0, 1);
     var maxDate = new Date(2015, 10, 31);
     
+    var colors = ["#a60000","#ff0000", "#ff4040","#ff7373","#67e667","#39e639","#00cc00"];
+
     activityChart
         .width (800)
         .height (500)
@@ -93,37 +113,65 @@ d3.json("data/part-poli.json", function(err, data) {
         .group(dateGroup)
         .xAxisLabel('Day')
         .yAxisLabel('Policies Sold')
-        .elasticX(1);
-    
-    bubbleChart
-        .width (800)
-        .height (500)
-        .dimension (provDim)
-        .group(provGroup)
-        .r(d3.scale.linear().domain([0, 200000]))
-        .colors(["#ff7373","#ff4040","#ff0000","#bf3030","#a60000"])
-        .colorDomain([13, 30])
-        .colorAccessor(function(d) {
-            return d.value;
+        .elasticY(true)
+        /*
+        .colors(d3.scale.quantize().range(["#a60000","#ff0000", "#ff4040","#ff7373","#67e667","#39e639","#00cc00"]))
+        .renderlet(function(chart){
+            chart.selectAll("rect.bar").attr("fill", function(d){
+                return colors[d.data.key.getDay()];
+            });
         })
-        .point("Ontario", 364, 400)
-        .point("Quebec", 395.5, 383)
-        .point("Northwest Territory", 40.5, 316)
-        .point("Nunavut Territory", 417, 370)
-        .point("Yukon", 120, 299)
-        .point("British Columbia", 163, 322)
-        .point("Alberta", 229, 345)
-        .point("Saskatchewan", 119, 329)
-        .point("Manitoba", 431, 351)
-        .point("Nova Scotia", 496, 367)
-        .point("Prince Edward Island", 553, 323)
-        .point("New Brunswick", 44, 176)
-        .point("Newfoundland and Labrador", 125, 195)
-    
-    dc.renderAll();
-    //console.log(all.value());
-    
-});
+        */
 
+    //console.log(all.value());
+
+    var provDim = ndx.dimension(function(d) { return d["state"] });
+    var provGroup = provDim.group();
+
+    d3.json("data/canada.json", function(err, mapData) {
+        if (err) throw err;
+        
+        var ndx = crossfilter(mapData);
+        var all = ndx.groupAll(mapData);
+    
+        var width = 1000;
+        var height = 1000;
+        var projection = d3.geo.albers();
+        projection.translate([500, 800]);
+        var path = d3.geo.path();
+        //projection.scale(1).center([300,300]);
+        path = path.projection(projection);
+        //console.log(mapData.features[0].properties.NAME);
+        
+        var choroChart = dc.geoChoroplethChart("#choroChart");
+    
+        choroChart
+            .width (width)
+            .height (height)
+            .dimension (provDim)
+            .group(provGroup)
+            .projection(projection)
+            .overlayGeoJson(mapData.features, "choroChart",
+                function(d) {
+                //console.log(JSON.stringify(mapData.features));
+                return d.properties.NAME;
+            })
+            
+            .valueAccessor(function (d) {
+                console.log(d.value)
+                return d.value;
+            })
+            
+            .colors(d3.scale.quantize().range(["#e4ffe2", "#b0ffaa", "#88ff7f", "#54ff47", "#30ff21", "#11ff00", "#0baf00", "#088400", "#055900", "#022600"]))
+            .colorDomain([0, 200])
+            //.colorAccessor(function(d, i){ return d.key })
+            .title(function(d) {
+                //console.log(d.key, d.value)
+                return d.key + " : " + d.value;
+            });
+        //console.log(JSON.stringify(mapData));
+        dc.renderAll();
+    });
+});
 
 
